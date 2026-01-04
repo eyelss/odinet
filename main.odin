@@ -274,13 +274,12 @@ main :: proc() {
 
         handler_on_connect := LTCP_Client_Handler_Listed {
                 handler = proc(ctx: ^LTCP_Context, socket: net.TCP_Socket, source: net.Endpoint) {
-                        fmt.printf("on_connect %s\n", source)
-                        // panic("extreme exit")
+                        fmt.printf("new client connected %s on socket %s\n", source, socket)
                 },
         }
 
         ltcp_push_on_connect(&ltcp_context, &handler_on_connect)
-        // ltcp_push_on_poll_ended(&ltcp_context, &handler_ended)
-        // ltcp_push_on_poll_begin(&ltcp_context, &handler_begin)
+        ltcp_push_on_poll_ended(&ltcp_context, &handler_ended)
+        ltcp_push_on_poll_begin(&ltcp_context, &handler_begin)
         ltcp_loop(&ltcp_context)
 }
