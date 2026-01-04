@@ -142,6 +142,7 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
                         continue
                 } else if err != .None {
                         // got error (including "Connection_Closed")
+                        ctx.recv_err = err
                         execute_client_handlers(ctx, client.socket, client.source, ctx.on_error_handlers)
 
                         append(&clients_to_remove, client)
