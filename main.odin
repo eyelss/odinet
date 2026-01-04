@@ -34,12 +34,6 @@ LTCP_Handlers :: struct {
         on_poll_ended_handlers: list.List,
 }
 
-LTCP_Opcode :: enum {
-        NIL,
-        TEXT,
-        BINARY
-}
-
 LTCP_Client_Handler_Listed :: struct {
         node: list.Node,
         handler: LTCP_Client_Handler,
@@ -60,6 +54,17 @@ LTCP_Anon_Handler :: #type proc(
         ctx: ^LTCP_Context
 )
 
+LTCP_Poll_Status :: enum {
+        PENDING,
+        GOOD,
+        ERROR
+}
+
+LTCP_Poll_Error :: union {
+        net.Accept_Error
+}
+
+@(private)
 execute_anon_handlers :: proc(
         ctx: ^LTCP_Context,
         handlers: list.List
@@ -71,6 +76,7 @@ execute_anon_handlers :: proc(
         }        
 }
 
+@(private)
 execute_client_handlers :: proc(
         ctx: ^LTCP_Context,
         socket: net.TCP_Socket,
@@ -115,16 +121,6 @@ destroy :: proc(ctx: ^LTCP_Context) {
         }
         
         net.close(ctx.socket)
-}
-
-LTCP_Poll_Status :: enum {
-        PENDING,
-        GOOD,
-        ERROR
-}
-
-LTCP_Poll_Error :: union {
-        net.Accept_Error
 }
 
 ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_Poll_Error) {
