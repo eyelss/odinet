@@ -26,10 +26,13 @@ LTCP_Clients :: struct {
 }
 
 LTCP_Handlers :: struct {
+        // client handlers
         on_error_handlers: list.List,
         on_message_handlers: list.List,
         on_connect_handlers: list.List,
         on_disconnect_handlers: list.List,
+
+        // anon handlers
         on_poll_begin_handlers: list.List,
         on_poll_ended_handlers: list.List,
 }
@@ -163,9 +166,7 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
 
         // clear clients on scheduled on remove
         for client_to_remove in clients_to_remove {
-                list.remove(&ctx.clients, &client_to_remove.node)
-                
-                free(client_to_remove)
+                defer free(client_to_remove)
                 
                 execute_client_handlers(
                         ctx,
@@ -173,6 +174,8 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
                         client_to_remove.source,
                         ctx.on_disconnect_handlers
                 )
+
+                list.remove(&ctx.clients, &client_to_remove.node)
         }
         clear(&clients_to_remove)
 
