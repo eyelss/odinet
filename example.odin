@@ -13,11 +13,11 @@ main :: proc() {
         ip4_str := "localhost:8080"
         endpoint, ok := net.resolve_ip4(ip4_str)
 
-        my_struct := Server_Space {
+        shared_space := Server_Space {
                 active_users_count = 0,
         }
 
-        init(&ltcp_context, endpoint, &my_struct)
+        init(&ltcp_context, endpoint, &shared_space)
         defer destroy(&ltcp_context)
 
         handler_begin := LTCP_Anon_Handler_Listed {
