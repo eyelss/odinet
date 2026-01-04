@@ -5,7 +5,7 @@ import "core:net"
 import "core:strconv"
 import "core:container/intrusive/list"
 
-TCP_Client :: struct {
+LTCP_Client :: struct {
         node: list.Node,
         socket: net.TCP_Socket,
         source: net.Endpoint
@@ -111,7 +111,7 @@ init :: proc(
         ctx.recv_err = .None
 
         clients: list.List
-        clients_to_remove: [dynamic]^TCP_Client
+        clients_to_remove: [dynamic]^LTCP_Client
 }
 
 destroy :: proc(ctx: ^LTCP_Context) {
@@ -129,8 +129,8 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
         execute_anon_handlers(ctx, ctx.on_poll_begin_handlers)
         defer execute_anon_handlers(ctx, ctx.on_poll_ended_handlers)
 
-        clients_iter := list.iterator_head(ctx.clients, TCP_Client, "node")
-        clients_to_remove: [dynamic]^TCP_Client
+        clients_iter := list.iterator_head(ctx.clients, LTCP_Client, "node")
+        clients_to_remove: [dynamic]^LTCP_Client
 
         for client in list.iterate_next(&clients_iter) {
                 n_read, err := net.recv(client.socket, ctx.buffer)
@@ -160,6 +160,7 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
                 
                 net.send(client.socket, ctx.output)
         }
+
         // clear clients on scheduled on remove
         for client_to_remove in clients_to_remove {
                 list.remove(&ctx.clients, &client_to_remove.node)
@@ -174,19 +175,19 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
                 )
         }
         clear(&clients_to_remove)
+
         client, source, err_accept := net.accept_tcp(ctx.socket)
+
         if err_accept == .Would_Block {
                 status = .PENDING
-                error = .None
         } else if err_accept != .None {
-                status = .ERROR
                 error = err_accept
+                status = .ERROR
         } else {
                 status = .GOOD
-                error = .None
 
                 // new connection established, adding new active user
-                client_list_value_ptr := new_clone(TCP_Client {
+                client_list_value_ptr := new_clone(LTCP_Client {
                         socket=client,
                         source=source
                 })
@@ -198,9 +199,7 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
         return
  }
 
-ltcp_loop :: proc(
-        ctx: ^LTCP_Context
-) {
+ltcp_loop :: proc(ctx: ^LTCP_Context) {
         for {
                 ltcp_poll(ctx)
         }
@@ -284,14 +283,14 @@ main :: proc() {
         handler_on_message1 := LTCP_Client_Handler_Listed {
                 handler = proc(ctx: ^LTCP_Context, socket: net.TCP_Socket, source: net.Endpoint) {
                         fmt.printf("first handler: client sent message from %s on socket %s\n", source, socket)
+                        fmt.printf("%s",transmute(string)ctx.buffer) // recieved data
                 },
         }
 
         handler_on_message2 := LTCP_Client_Handler_Listed {
                 handler = proc(ctx: ^LTCP_Context, socket: net.TCP_Socket, source: net.Endpoint) {
                         fmt.printf("second handler: client sent message from %s on socket %s\n", source, socket)
-                        // read ctx.buffer to get recieved data
-                        // modify ctx.output to set or change send data
+                        ctx.output = transmute([]u8)string("message") // data that will be outputed
                 },
         }
 
