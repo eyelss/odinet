@@ -11,6 +11,18 @@ LTCP_Client :: struct {
         source: net.Endpoint
 }
 
+/*
+LTCP Context - unified structure for control of LTCP activity
+
+**Props**
+- socket: Listen socket TCP address 
+- endpoint: Listen socket TCP endpoint
+- buffer: Buffer for recieving data
+- output: Buffer for sending data
+- recv_err: Error on recieved data from client
+- tcp_clients: List of currently active tcp clients
+- client_handlers: Lists of attached handlers
+*/
 LTCP_Context :: struct {
         socket: net.TCP_Socket,
         buffer: []u8,                   // recv client stream
@@ -25,6 +37,17 @@ LTCP_Clients :: struct {
         clients: list.List,
 }
 
+/*
+LTCP Handlers struct.
+
+**Props**
+- on_error_handlers: List of error client handlers - executes if error occured on tcp recv,
+- on_message_handlers: List of message client handlers - executes if got message on tcp recv,
+- on_connect_handlers: List of new client connection handlers - executes on tcp accept,
+- on_disconnect_handlers: List of client disconnection handlers - exectues on 0-bytes recv or recv error after removing client from clients list,
+- on_poll_begin_handlers: List of poll begin handlers - exectues at beginning of poll proc,
+- on_poll_ended_handlers: List of poll end handlers - exectues as defers of poll proc
+*/
 LTCP_Handlers :: struct {
         // client handlers
         on_error_handlers: list.List,
@@ -96,15 +119,28 @@ execute_client_handlers :: proc(
 DEFAULT_LTCP_BUFFER_SIZE :: 4096
 DEFAULT_LTCP_OUTPUT_SIZE :: 4096
 
+/*
+Initialize LTCP context.
+
+**Inputs**
+- ctx: The uninitialized context of LTCP 
+- endpoint: The listening endpoint
+- buffer_size: Size of input buiffer := DEFAULT_LTCP_BUFFER_SIZE
+- output_size: Size of output buiffer := DEFAULT_LTCP_OUTPUT_SIZE
+*/
 init :: proc(
         ctx: ^LTCP_Context,
         endpoint: net.Endpoint,
         buffer_size := DEFAULT_LTCP_BUFFER_SIZE,
         output_size := DEFAULT_LTCP_OUTPUT_SIZE
-) {
+) -> net.Network_Error {
         socket, err_listen := net.listen_tcp(endpoint)
 
         net.set_blocking(socket, false)
+
+        if err_listen != nil {
+                return err_listen
+        }
 
         net.set_option(socket, net.Socket_Option.Reuse_Address, true)        
         
@@ -113,10 +149,15 @@ init :: proc(
         ctx.output = make([]u8, output_size)
         ctx.recv_err = .None
 
-        clients: list.List
-        clients_to_remove: [dynamic]^LTCP_Client
+        return nil
 }
 
+/*
+Destroy LTCP context.
+
+**Inputs**
+- ctx: The initialized context of LTCP
+*/
 destroy :: proc(ctx: ^LTCP_Context) {
         defer {
                 delete(ctx.buffer)
@@ -137,7 +178,6 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
 
         for client in list.iterate_next(&clients_iter) {
                 n_read, err := net.recv(client.socket, ctx.buffer)
-
                 ctx.recv_err = err
 
                 if err == .Would_Block {
@@ -200,8 +240,12 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
         }
 
         return
- }
+}
 
+
+/*
+Exectues endless loop of polling
+*/
 ltcp_loop :: proc(ctx: ^LTCP_Context) {
         for {
                 ltcp_poll(ctx)
@@ -250,6 +294,15 @@ ltcp_push_on_message :: proc(ctx: ^LTCP_Context, handler: ^LTCP_Client_Handler_L
         )
 }
 
+ltcp_remove_handler :: proc(ctx: ^LTCP_Context, node: ^list.Node) {
+        list.remove(&ctx.on_error_handlers, node)
+        list.remove(&ctx.on_message_handlers, node)
+        list.remove(&ctx.on_connect_handlers, node)
+        list.remove(&ctx.on_disconnect_handlers, node)
+        list.remove(&ctx.on_poll_begin_handlers, node)
+        list.remove(&ctx.on_poll_ended_handlers, node)
+}
+
 main :: proc() {
         ltcp_context: LTCP_Context
 
@@ -286,7 +339,7 @@ main :: proc() {
         handler_on_message1 := LTCP_Client_Handler_Listed {
                 handler = proc(ctx: ^LTCP_Context, socket: net.TCP_Socket, source: net.Endpoint) {
                         fmt.printf("first handler: client sent message from %s on socket %s\n", source, socket)
-                        fmt.printf("%s",transmute(string)ctx.buffer) // recieved data
+                        fmt.printf("%s", ctx.buffer) // recieved data
                 },
         }
 
@@ -297,11 +350,13 @@ main :: proc() {
                 },
         }
 
+        
         ltcp_push_on_connect(&ltcp_context, &handler_on_connect)
         ltcp_push_on_disconnect(&ltcp_context, &handler_on_disconnect)
         ltcp_push_on_message(&ltcp_context, &handler_on_message1)
         ltcp_push_on_message(&ltcp_context, &handler_on_message2)
         // ltcp_push_on_poll_ended(&ltcp_context, &handler_ended)
         // ltcp_push_on_poll_begin(&ltcp_context, &handler_begin)
+        ltcp_remove_handler(&ltcp_context, &handler_on_connect.node)
         ltcp_loop(&ltcp_context)
 }
