@@ -20,6 +20,7 @@ LTCP Context - unified structure for control of LTCP activity
 - buffer: Buffer for recieving data
 - output: Buffer for sending data
 - recv_err: Error on recieved data from client
+- shared: Shared editable memory space between handlers
 - tcp_clients: List of currently active tcp clients
 - client_handlers: Lists of attached handlers
 */
@@ -126,7 +127,7 @@ Initialize LTCP context.
 **Inputs**
 - ctx: The uninitialized context of LTCP 
 - endpoint: The listening endpoint
-- shared: Shared editable memory space between handlers 
+- shared: Shared editable memory space between handlers
 - buffer_size: Size of input buiffer := DEFAULT_LTCP_BUFFER_SIZE
 - output_size: Size of output buiffer := DEFAULT_LTCP_OUTPUT_SIZE
 */
