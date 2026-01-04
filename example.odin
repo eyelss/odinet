@@ -3,13 +3,23 @@ package odinet
 import "core:fmt"
 import "core:net"
 
+My_Struct :: struct {
+        a: int,
+        b: int
+}
+
 main :: proc() {
         ltcp_context: LTCP_Context
 
         ip4_str := "localhost:8080"
         endpoint, ok := net.resolve_ip4(ip4_str)
 
-        init(&ltcp_context, endpoint)
+        my_struct := My_Struct {
+                a = 0,
+                b = 10
+        }
+
+        init(&ltcp_context, endpoint, &my_struct)
         defer destroy(&ltcp_context)
 
         handler_begin := LTCP_Anon_Handler_Listed {
@@ -26,7 +36,9 @@ main :: proc() {
 
         handler_on_connect := LTCP_Client_Handler_Listed {
                 handler = proc(ctx: ^LTCP_Context, socket: net.TCP_Socket, source: net.Endpoint) {
-                        fmt.printf("client connected %s on socket %s\n", source, socket)
+                        shared := transmute(^My_Struct)ctx.shared
+                        fmt.printf("%s\n", shared^)
+                        shared.a = 777 // another handlers will detect this value 
                 },
         }
 
@@ -56,6 +68,6 @@ main :: proc() {
         ltcp_push_on_message(&ltcp_context, &handler_on_message2)
         // ltcp_push_on_poll_ended(&ltcp_context, &handler_ended)
         // ltcp_push_on_poll_begin(&ltcp_context, &handler_begin)
-        ltcp_remove_handler(&ltcp_context, &handler_on_connect.node)
+        // ltcp_remove_handler(&ltcp_context, &handler_on_connect.node)
         ltcp_loop(&ltcp_context)
 }

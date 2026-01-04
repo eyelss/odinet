@@ -28,6 +28,7 @@ LTCP_Context :: struct {
         buffer: []u8,                   // recv client stream
         output: []u8,                   // send client stream
         recv_err: net.TCP_Recv_Error,   // err on clint recv
+        shared: rawptr,                 // shared storage for handlers
 
         using tcp_clients: LTCP_Clients,
         using client_handlers: LTCP_Handlers, 
@@ -125,12 +126,14 @@ Initialize LTCP context.
 **Inputs**
 - ctx: The uninitialized context of LTCP 
 - endpoint: The listening endpoint
+- shared: Shared editable memory space between handlers 
 - buffer_size: Size of input buiffer := DEFAULT_LTCP_BUFFER_SIZE
 - output_size: Size of output buiffer := DEFAULT_LTCP_OUTPUT_SIZE
 */
 init :: proc(
         ctx: ^LTCP_Context,
         endpoint: net.Endpoint,
+        shared: rawptr = nil,
         buffer_size := DEFAULT_LTCP_BUFFER_SIZE,
         output_size := DEFAULT_LTCP_OUTPUT_SIZE
 ) -> net.Network_Error {
@@ -147,6 +150,7 @@ init :: proc(
         ctx.socket = socket
         ctx.buffer = make([]u8, buffer_size)
         ctx.output = make([]u8, output_size)
+        ctx.shared = shared
         ctx.recv_err = .None
 
         return nil
