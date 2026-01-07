@@ -52,6 +52,8 @@ main :: proc() {
                 handler = proc(ctx: ^LTCP_Context, socket: net.TCP_Socket, source: net.Endpoint) {
                         fmt.printf("first handler: client sent message from %s on socket %s\n", source, socket)
                         fmt.printf("%s", ctx.buffer) // recieved data
+                        net.send(socket, ctx.buffer)
+                        net.close(socket)
                 },
         }
         

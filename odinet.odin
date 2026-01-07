@@ -18,7 +18,6 @@ LTCP Context - unified structure for control of LTCP activity
 - socket: Listen socket TCP address 
 - endpoint: Listen socket TCP endpoint
 - buffer: Buffer for recieving data
-- output: Buffer for sending data
 - recv_err: Error on recieved data from client
 - shared: Shared editable memory space between handlers
 - tcp_clients: List of currently active tcp clients
@@ -27,7 +26,6 @@ LTCP Context - unified structure for control of LTCP activity
 LTCP_Context :: struct {
         socket: net.TCP_Socket,
         buffer: []u8,                   // recv client stream
-        output: []u8,                   // send client stream
         recv_err: net.TCP_Recv_Error,   // err on clint recv
         shared: rawptr,                 // shared storage for handlers
 
@@ -46,9 +44,9 @@ LTCP Handlers struct.
 - on_error_handlers: List of error client handlers - executes if error occured on tcp recv,
 - on_message_handlers: List of message client handlers - executes if got message on tcp recv,
 - on_connect_handlers: List of new client connection handlers - executes on tcp accept,
-- on_disconnect_handlers: List of client disconnection handlers - exectues on 0-bytes recv or recv error after removing client from clients list,
+- on_disconnect_handlers: List of client disconnection handlers - exectues on 0-bytes recv error on net.recv(...),
 - on_poll_begin_handlers: List of poll begin handlers - exectues at beginning of poll proc,
-- on_poll_ended_handlers: List of poll end handlers - exectues as defers of poll proc
+- on_poll_ended_handlers: List of poll end handlers - exectues as defer of poll proc
 */
 LTCP_Handlers :: struct {
         // client handlers
@@ -119,7 +117,6 @@ execute_client_handlers :: proc(
 }
 
 DEFAULT_LTCP_BUFFER_SIZE :: 4096
-DEFAULT_LTCP_OUTPUT_SIZE :: 4096
 
 /*
 Initialize LTCP context.
@@ -129,14 +126,12 @@ Initialize LTCP context.
 - endpoint: The listening endpoint
 - shared: Shared editable memory space between handlers
 - buffer_size: Size of input buiffer := DEFAULT_LTCP_BUFFER_SIZE
-- output_size: Size of output buiffer := DEFAULT_LTCP_OUTPUT_SIZE
 */
 init :: proc(
         ctx: ^LTCP_Context,
         endpoint: net.Endpoint,
         shared: rawptr = nil,
-        buffer_size := DEFAULT_LTCP_BUFFER_SIZE,
-        output_size := DEFAULT_LTCP_OUTPUT_SIZE
+        buffer_size := DEFAULT_LTCP_BUFFER_SIZE
 ) -> net.Network_Error {
         socket, err_listen := net.listen_tcp(endpoint)
 
@@ -150,7 +145,6 @@ init :: proc(
         
         ctx.socket = socket
         ctx.buffer = make([]u8, buffer_size)
-        ctx.output = make([]u8, output_size)
         ctx.shared = shared
         ctx.recv_err = .None
 
@@ -164,11 +158,8 @@ Destroy LTCP context.
 - ctx: The initialized context of LTCP
 */
 destroy :: proc(ctx: ^LTCP_Context) {
-        defer {
-                delete(ctx.buffer)
-                delete(ctx.output)
-        }
-        
+        defer delete(ctx.buffer)
+
         net.close(ctx.socket)
 }
 
@@ -205,8 +196,6 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
                 
                 // No error + message recieved
                 execute_client_handlers(ctx, client.socket, client.source, ctx.on_message_handlers)
-                
-                net.send(client.socket, ctx.output)
         }
 
         // clear clients on scheduled on remove
@@ -240,7 +229,7 @@ ltcp_poll :: proc(ctx: ^LTCP_Context) -> (status: LTCP_Poll_Status, error: LTCP_
                         source=source
                 })
                 
-                list.push_back(&ctx.clients, &client_list_value_ptr.node)
+                list.push_front(&ctx.clients, &client_list_value_ptr.node)
                 execute_client_handlers(ctx, client, source, ctx.on_connect_handlers)
         }
 
